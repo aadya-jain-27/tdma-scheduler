@@ -194,6 +194,100 @@ Slot 08     |  0 |  0 |  0 |  0 |  0 |  0 |  0 |  0 |  0 |  0 |  1 |  0 |  0 |  
 <h3>4.5&nbsp;&nbsp;A note on the sample output in the brief</h3>
 <p>While testing the safety check, I ran the sample schedule from the brief (5 slots) on the 300&nbsp;m grid. It found 21 hidden terminal clashes. For example, Node_01 and Node_03 are both in slot 0, and both can reach Node_02. Since the minimum for this grid is 9 slots, no 5-slot schedule can be correct for it. The sample was probably meant only to show the output format, or was made for different positions, but it was a useful test that the safety check catches real mistakes.</p>
 
+<h2>5&nbsp;&nbsp;EMANE integration (Part 2)</h2>
+<p>EMANE is a network emulator: it imitates real radios in software, so a radio network can be tested on one computer. The goal of Part 2 is to load the schedule into EMANE's TDMA radio model and show that traffic between the emulated radios follows it.</p>
+
+<h3>5.1&nbsp;&nbsp;Setup</h3>
+<p>The brief allows either one Linux machine or one container. I used a single Docker container, and gave each radio its own Linux network namespace. A namespace is a separate copy of the network settings, so each radio behaves like its own small computer, without needing 16 containers. EMANE's ready-made packages only exist for Intel and AMD processors, and my laptop has an ARM processor, so the Dockerfile builds EMANE from its source code [7] on Ubuntu 22.04.</p>
+
+<h3>5.2&nbsp;&nbsp;Radio settings</h3>
+<p>Each emulated radio uses EMANE's TDMA model. This model does not create a schedule itself. It waits to receive one, then transmits only in its own slots and listens in all the others. This fits the design well: my program decides the schedule, and EMANE follows it. The main settings are shown below.</p>
+<table>
+  <thead><tr><th>Setting</th><th>Value</th><th>Reason</th></tr></thead>
+  <tbody>
+    <tr><td>Slot length</td><td>1&nbsp;ms</td><td>Required by the brief</td></tr>
+    <tr><td>Slots per frame</td><td>From my program (9 for the grid)</td><td>The frame length is the program's output</td></tr>
+    <tr><td>Frequency</td><td>2.4&nbsp;GHz, one channel</td><td>All radios share one frequency</td></tr>
+    <tr><td>Data rate</td><td>10&nbsp;Mbit/s</td><td>1,250 bytes per slot, enough for one ping packet</td></tr>
+    <tr><td>Who can hear whom</td><td>Set from the 500&nbsp;m rule</td><td>Matches Part 1 exactly</td></tr>
+    <tr><td>Overlapping signals</td><td>Counted as interference</td><td>So that clashes really cause packet loss</td></tr>
+    <tr><td>Packet bundling</td><td>On, up to 50% of a slot</td><td>Lets busy radios send several packets per turn, with spare time left in the slot</td></tr>
+  </tbody>
+</table>
+<div class="tcap">Table 4: EMANE settings.</div>
+<p>I did not want EMANE to work out by itself who can hear whom, because its idea of "in range" might be slightly different from mine. Instead, my program tells EMANE directly how much each signal weakens between each pair of radios (the path loss). Radios within 500&nbsp;m get a strong signal (90&nbsp;dB loss), and all others get a signal so weak that it cannot be heard (200&nbsp;dB loss). I also set EMANE to add up signals that arrive at the same time, so that a hidden terminal clash really causes packet loss in the emulation.</p>
+
+<h3>5.3&nbsp;&nbsp;Converting the schedule</h3>
+<p>A converter script, <code>emane/bridge.py</code>, reads the schedule saved by my program and writes the files EMANE needs: the schedule itself, one settings file per radio, and the path loss table. Node_01 becomes EMANE radio 1 with address 10.100.0.1, and so on. Slot sharing appears directly in the schedule file, where one slot can list several radios:</p>
+<pre>&lt;emane-tdma-schedule&gt;
+  &lt;structure frames="1" slots="9" slotoverhead="0" slotduration="1000" bandwidth="1M"/&gt;
+  &lt;multiframe frequency="2.4G" power="0" class="0" datarate="10M"&gt;
+    &lt;frame index="0"&gt;
+      &lt;slot index="0" nodes="1,4,13,16"/&gt;
+      &lt;slot index="1" nodes="2,14"/&gt;
+      &lt;slot index="2" nodes="3,15"/&gt;
+      ...
+      &lt;slot index="8" nodes="11"/&gt;
+    &lt;/frame&gt;
+  &lt;/multiframe&gt;
+&lt;/emane-tdma-schedule&gt;</pre>
+<p>The converter refuses to run if my program did not mark the schedule as safe. With the <code>--naive</code> option, it writes the simpler one-hop schedule from Section 4.3 instead, which is used for comparison. A test converts a schedule into the EMANE format, reads it back, and checks that nothing has changed.</p>
+
+<h3>5.4&nbsp;&nbsp;Test plan</h3>
+<p>The script <code>emane/run_demo.sh</code> runs inside the container and does the following, first with my schedule and then with the simpler one:</p>
+<ol>
+  <li>Create the schedule and convert it to the EMANE format.</li>
+  <li>Start 16 emulated radios, each in its own namespace.</li>
+  <li>Send EMANE the path loss table and then the schedule.</li>
+  <li>Make every radio send pings to all of its neighbours at the same time (50 packets each, 20 per second), so the channel is busy, and record how many packets are lost on each link.</li>
+  <li>Read each radio's slot statistics to see which slots it actually transmitted in.</li>
+</ol>
+<p>If EMANE follows the schedule, my schedule should show little or no packet loss, and each radio should only transmit in its own slot. The simpler schedule should lose packets on links where the receiver has a hidden terminal.</p>
+
+<h3>5.5&nbsp;&nbsp;Results</h3>
+<p>The emulation was run on my laptop, inside one Docker container, with 16 emulated radios on the 4&nbsp;&times;&nbsp;4 grid. Each radio sent 50 pings to each of its neighbours at the same time, which gives 84 links in total. EMANE keeps a count of every dropped packet together with the reason, and I used these counts to separate real collisions from other problems.</p>
+<p>First, EMANE followed the schedule exactly. Each radio's slot table showed that it transmitted only in the slot my program gave it (for example, Node_01 only in slot 0 and Node_06 only in slot 4) and listened in all other slots.</p>
+<table>
+  <thead><tr><th>Slot length</th><th>Schedule</th><th class="r">Average loss</th><th class="r">Links with no loss</th><th class="r">Collision drops</th><th class="r">Timing drops</th></tr></thead>
+  <tbody>
+    <tr><td>1&nbsp;ms</td><td>Two-hop (mine)</td><td class="r">9.9%</td><td class="r">37 / 84</td><td class="r">0</td><td class="r">166,082</td></tr>
+    <tr><td>1&nbsp;ms</td><td>One-hop (simple)</td><td class="r">63.8%</td><td class="r">0 / 84</td><td class="r">1,078</td><td class="r">1,053,460</td></tr>
+    <tr><td>5&nbsp;ms</td><td>Two-hop (mine)</td><td class="r">0.0%</td><td class="r">84 / 84</td><td class="r">0</td><td class="r">0</td></tr>
+    <tr><td>5&nbsp;ms</td><td>One-hop (simple)</td><td class="r">61.4%</td><td class="r">0 / 84</td><td class="r">20,688</td><td class="r">0</td></tr>
+  </tbody>
+</table>
+<div class="tcap">Table 5: EMANE results. Drop counts are in bytes, added up over all 16 radios. Collision drops are packets lost because two signals overlapped at the receiver. Timing drops are packets that reached the receiver after their slot had already ended.</div>
+<figure><img src="../output/emane_results.png" style="width:70%"><figcaption>Figure 4: Average packet loss in EMANE for the two schedules.</figcaption></figure>
+<p>With 1&nbsp;ms slots, as asked in the brief, my schedule had no collision drops at all, while the one-hop schedule had collisions, as expected from Section 4.3. However, my schedule still lost 9.9% of its packets. The drop counts showed that every one of these losses was a timing drop: the packet arrived after its slot had ended. The slot tables showed packets arriving between a quarter and three quarters of a slot late. The cause is the test machine, not the schedule. Sixteen emulated radios share two CPU cores in a small virtual machine, and passing a packet between them takes close to a millisecond, which is about the length of a whole slot.</p>
+<p>To confirm this, I ran the same test again with 5&nbsp;ms slots, which gives each packet enough time to arrive within its slot. Nothing else was changed. My schedule then delivered every packet on all 84 links. The one-hop schedule still lost 61.4% of its packets, and this time every single one of its drops was a collision. Eight of its links lost all of their packets.</p>
+<p>These results show that EMANE sends and blocks traffic strictly according to the schedule from Part 1, and that the two-hop rule is what prevents collisions. On real radio hardware, or on a faster machine, I would expect the 1&nbsp;ms setup to behave like the 5&nbsp;ms run here.</p>
+
+<h3>5.6&nbsp;&nbsp;Problems I ran into</h3>
+<ul>
+  <li>The first EMANE build failed because my laptop ran out of disk space. After freeing space, it built from source without changes.</li>
+  <li>EMANE expects the path to its reception curve file to be written as a <code>file://</code> address. I found this by comparing my settings with the example files that come with EMANE.</li>
+  <li>With bundling switched off, each radio could send only one packet per turn, and busy radios filled their queues (over 5,000 queue overflow drops). With bundling up to 90% of a slot, long bundles ran past the end of the slot. A limit of 50% worked best.</li>
+</ul>
+
+<h2>6&nbsp;&nbsp;Limitations and next steps</h2>
+<p><b>Range model.</b> I treat the range as a perfect 500&nbsp;m circle. Real signals fade gradually, so a radio just outside 500&nbsp;m can still cause some interference. A better version would decide links from signal strength, using the same model as EMANE.</p>
+<p><b>One slot per radio.</b> Every radio gets exactly one slot, but in a real network some radios, such as relays, carry much more traffic than others. The program could be extended to give busy radios more than one slot.</p>
+<p><b>Fixed positions.</b> The schedule is made once, for radios that do not move. In a mobile network the links change over time. Making a completely new schedule each time would move most radios to new slots, so a better approach would update only the radios near the change.</p>
+<p><b>Central planner.</b> The brief asks for a central planner, but if it fails, the whole network is affected. Methods exist where radios agree on slots among themselves, and these would be the next step for a real mobile network.</p>
+
+<h2>7&nbsp;&nbsp;Conclusion</h2>
+<p>Treating slot planning as graph colouring made it possible to use proven colouring methods directly. Running several methods and comparing the result with the theoretical minimum turned out to be more useful than relying on one clever method, because it shows when the answer cannot be improved. For the 16-radio grid, the program produces a 9-slot schedule, which is the best possible, and it reached the minimum on all 200 random networks tested. In Part 2, EMANE followed the schedule exactly. With 5&nbsp;ms slots my schedule delivered every packet, while the simpler one-hop schedule lost 61.4% of its packets to collisions. With 1&nbsp;ms slots my schedule still had no collisions, and its remaining losses came from the speed of the test machine.</p>
+
+<h2>References</h2>
+<div class="refs">
+  <p>[1] D. Br&eacute;laz, "New methods to color the vertices of a graph," <i>Communications of the ACM</i>, vol. 22, no. 4, pp. 251&ndash;256, 1979.</p>
+  <p>[2] D. W. Matula and L. L. Beck, "Smallest-last ordering and clustering and graph coloring algorithms," <i>Journal of the ACM</i>, vol. 30, no. 3, pp. 417&ndash;427, 1983.</p>
+  <p>[3] J. C. Culberson, "Iterated greedy graph coloring and the difficulty landscape," Technical Report TR 92-07, University of Alberta, 1992.</p>
+  <p>[4] S. T. McCormick, "Optimal approximation of sparse Hessians and its equivalence to a graph coloring problem," <i>Mathematical Programming</i>, vol. 26, pp. 153&ndash;171, 1983.</p>
+  <p>[5] S. Ramanathan, "A unified framework and algorithm for channel assignment in wireless networks," <i>Wireless Networks</i>, vol. 5, pp. 81&ndash;94, 1999.</p>
+  <p>[6] A. A. Hagberg, D. A. Schult and P. J. Swart, "Exploring network structure, dynamics, and function using NetworkX," in <i>Proc. 7th Python in Science Conference</i>, 2008.</p>
+  <p>[7] Adjacent Link LLC, EMANE: Extendable Mobile Ad-hoc Network Emulator, https://github.com/adjacentlink/emane, and TDMA radio model documentation, https://emane.io/tdma-radio-model.</p>
+</div>
 
 </body>
 </html>
