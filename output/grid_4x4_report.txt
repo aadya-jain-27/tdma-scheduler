@@ -1,0 +1,69 @@
+================================================================
+            TDMA TOPOLOGY OPTIMIZATION REPORT
+================================================================
+Total Nodes Processed  : 16
+Configured Radio Range : 500.0 meters
+Radio Links (1-hop)    : 42
+Conflict Pairs (<=2hop): 90
+Optimized Frame Length : 9 unique timeslots (Lower is better)
+Theoretical Minimum    : 9 timeslots (degree bound 9, clique bound 9)
+Optimality             : PROVEN OPTIMAL (no schedule can use fewer slots)
+Spatial Reuse Factor   : 1.78 nodes per slot
+----------------------------------------------------------------
+HEURISTIC COMPARISON:
+
+ Largest-First Greedy    : 9 slots  <- best start
+ Smallest-Last Greedy    : 9 slots
+ DSATUR                  : 9 slots
+ + Iterated Greedy       : 9 slots
+ + Exact Search          : 9 slots
+----------------------------------------------------------------
+NODE -> SLOT ASSIGNMENTS:
+
+ Node_01: Slot 0
+ Node_02: Slot 1
+ Node_03: Slot 2
+ Node_04: Slot 0
+ Node_05: Slot 3
+ Node_06: Slot 4
+ Node_07: Slot 5
+ Node_08: Slot 3
+ Node_09: Slot 6
+ Node_10: Slot 7
+ Node_11: Slot 8
+ Node_12: Slot 6
+ Node_13: Slot 0
+ Node_14: Slot 1
+ Node_15: Slot 2
+ Node_16: Slot 0
+
+STRUCTURAL TDMA SCHEDULE MATRIX (Slot x Node Boolean Matrix):
+
+Slot \ Node | 01 | 02 | 03 | 04 | 05 | 06 | 07 | 08 | 09 | 10 | 11 | 12 | 13 | 14 | 15 | 16
+-------------------------------------------------------------------------------------------
+Slot 00     |  1 |  0 |  0 |  1 |  0 |  0 |  0 |  0 |  0 |  0 |  0 |  0 |  1 |  0 |  0 |  1
+Slot 01     |  0 |  1 |  0 |  0 |  0 |  0 |  0 |  0 |  0 |  0 |  0 |  0 |  0 |  1 |  0 |  0
+Slot 02     |  0 |  0 |  1 |  0 |  0 |  0 |  0 |  0 |  0 |  0 |  0 |  0 |  0 |  0 |  1 |  0
+Slot 03     |  0 |  0 |  0 |  0 |  1 |  0 |  0 |  1 |  0 |  0 |  0 |  0 |  0 |  0 |  0 |  0
+Slot 04     |  0 |  0 |  0 |  0 |  0 |  1 |  0 |  0 |  0 |  0 |  0 |  0 |  0 |  0 |  0 |  0
+Slot 05     |  0 |  0 |  0 |  0 |  0 |  0 |  1 |  0 |  0 |  0 |  0 |  0 |  0 |  0 |  0 |  0
+Slot 06     |  0 |  0 |  0 |  0 |  0 |  0 |  0 |  0 |  1 |  0 |  0 |  1 |  0 |  0 |  0 |  0
+Slot 07     |  0 |  0 |  0 |  0 |  0 |  0 |  0 |  0 |  0 |  1 |  0 |  0 |  0 |  0 |  0 |  0
+Slot 08     |  0 |  0 |  0 |  0 |  0 |  0 |  0 |  0 |  0 |  0 |  1 |  0 |  0 |  0 |  0 |  0
+-------------------------------------------------------------------------------------------
+
+SPATIAL REUSE (radios sharing a slot, closest pair distance):
+
+ Slot 00: [01, 04, 13, 16]  closest pair 3 hops apart
+ Slot 01: [02, 14]  closest pair 3 hops apart
+ Slot 02: [03, 15]  closest pair 3 hops apart
+ Slot 03: [05, 08]  closest pair 3 hops apart
+ Slot 04: [06]  used by one node only
+ Slot 05: [07]  used by one node only
+ Slot 06: [09, 12]  closest pair 3 hops apart
+ Slot 07: [10]  used by one node only
+ Slot 08: [11]  used by one node only
+
+Execution finalized cleanly. Schedule verified conflict-free.
+(Every same-slot pair re-checked: none are 1 or 2 hops apart.)
+================================================================
