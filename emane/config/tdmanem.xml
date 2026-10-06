@@ -18,5 +18,6 @@
     <!-- We push pathloss values ourselves (bridge.py), built from the
          same 500 m rule as Part 1, so "in range" means the same thing in both. -->
     <param name="propagationmodel" value="precomputed"/>
+    <param name="subid" value="7"/>
   </phy>
 </nem>

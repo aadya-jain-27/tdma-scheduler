@@ -9,8 +9,9 @@
   <param name="neighbormetricdeletetime" value="60.0"/>
   <param name="neighbormetricupdateinterval" value="1.0"/>
   <param name="pcrcurveuri"
-         value="/usr/share/emane/xml/models/mac/tdmaeventscheduler/tdmabasemodelpcr.xml"/>
+         value="file:///usr/share/emane/xml/models/mac/tdmaeventscheduler/tdmabasemodelpcr.xml"/>
   <param name="queue.depth" value="64"/>
   <param name="queue.fragmentationenable" value="on"/>
   <param name="queue.aggregationenable" value="on"/>
+  <param name="queue.aggregationslotthreshold" value="50.0"/>
 </mac>
