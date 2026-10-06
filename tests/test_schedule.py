@@ -68,6 +68,32 @@ def test_random_layouts_are_always_conflict_free():
         assert slot_count(plan.slots) >= plan.lower_bound
 
 
+def test_bridge_xml_keeps_the_schedule():
+    import subprocess
+    import tempfile
+    import xml.etree.ElementTree as ET
+    from tdma.report import to_json
+
+    root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    grid = {f"Node_{i*4+j+1:02d}": (j * 300.0, i * 300.0)
+            for i in range(4) for j in range(4)}
+    plan = make_plan(grid)
+    with tempfile.TemporaryDirectory() as tmp:
+        src = os.path.join(tmp, "schedule.json")
+        with open(src, "w") as f:
+            f.write(to_json(plan))
+        subprocess.run([sys.executable, os.path.join(root_dir, "emane", "bridge.py"),
+                        src, "--out", tmp], check=True, capture_output=True)
+        xml_root = ET.parse(os.path.join(tmp, "schedule.xml")).getroot()
+
+    from_xml = {}
+    for slot in xml_root.iter("slot"):
+        for nem in slot.get("nodes").split(","):
+            from_xml[list(grid)[int(nem) - 1]] = int(slot.get("index"))
+    assert from_xml == plan.slots
+    assert xml_root.find("structure").get("slotduration") == "1000"
+
+
 if __name__ == "__main__":
     for name, fn in list(globals().items()):
         if name.startswith("test_"):
