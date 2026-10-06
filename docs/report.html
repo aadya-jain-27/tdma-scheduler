@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>TDMA Schedule Planner and Optimizer</title>
+<style>
+  @page {
+    size: A4;
+    margin: 25mm 24mm 25mm 24mm;
+    @bottom-center { content: counter(page); font-family: Charter, "Bitstream Charter", Georgia, serif; font-size: 10pt; }
+  }
+  @page :first { @bottom-center { content: none; } }
+
+  body { font-family: Charter, "Bitstream Charter", Georgia, serif; font-size: 11pt; line-height: 1.42; color: #000; background: #fff; margin: 0; text-align: justify; hyphens: auto; }
+  h1, h2, h3 { font-weight: bold; text-align: left; break-after: avoid; }
+  h2 { font-size: 14pt; margin: 22pt 0 8pt; }
+  h3 { font-size: 11.5pt; margin: 14pt 0 5pt; }
+  p { margin: 0 0 8pt; }
+  ul, ol { margin: 0 0 8pt; padding-left: 20pt; }
+  li { margin-bottom: 3pt; }
+  code { font-family: Menlo, "Courier New", monospace; font-size: 9pt; }
+  pre { font-family: Menlo, "Courier New", monospace; font-size: 8.2pt; line-height: 1.3; margin: 6pt 0 10pt; padding: 0 0 0 10pt; text-align: left; white-space: pre; break-inside: avoid; }
+
+  table { border-collapse: collapse; margin: 8pt auto 4pt; font-size: 10pt; break-inside: avoid; }
+  th, td { padding: 3pt 8pt; text-align: left; vertical-align: top; }
+  thead th { border-top: 1.2pt solid #000; border-bottom: 0.6pt solid #000; font-weight: bold; }
+  tbody tr:last-child td { border-bottom: 1.2pt solid #000; }
+  td.r, th.r { text-align: right; }
+  .tcap, figcaption { font-size: 9.8pt; text-align: center; margin: 4pt 8% 14pt; }
+  figure { margin: 10pt 0 4pt; text-align: center; break-inside: avoid; }
+  figure img { max-width: 100%; }
+
+  .title-page { height: 240mm; display: flex; flex-direction: column; align-items: center; text-align: center; break-after: page; }
+  .title-page .top { margin-top: 55mm; }
+  .title-page h1 { font-size: 21pt; margin: 0 0 10pt; text-align: center; }
+  .title-page .subtitle { font-size: 13pt; margin-bottom: 40pt; }
+  .title-page .author { font-size: 13pt; margin-bottom: 4pt; }
+  .title-page .small { font-size: 11pt; }
+  .title-page .bottom { margin-top: auto; font-size: 11pt; }
+
+  .abstract { margin: 0 8% 14pt; font-size: 10.5pt; }
+  .abstract h2 { text-align: center; font-size: 11pt; margin: 0 0 6pt; }
+  .refs p { padding-left: 22pt; text-indent: -22pt; text-align: left; font-size: 10pt; margin-bottom: 5pt; }
+  .eq { text-align: center; margin: 6pt 0 10pt; font-style: italic; }
+</style>
+</head>
+<body>
+
+<div class="title-page">
+  <div class="top">
+    <h1>TDMA Schedule Planner and Optimizer</h1>
+    <div class="subtitle">Planning collision-free time slots for radios,<br>and loading the plan into the EMANE network emulator</div>
+    <div class="author">Aadya Jain</div>
+    <div class="small">Wireless Developer Internship assignment<br>Vaan Megam Networks Pvt. Ltd.</div>
+  </div>
+  <div class="bottom">October 2026</div>
+</div>
+
+<div class="abstract">
+  <h2>Summary</h2>
+  <p>This report describes a program that decides when each radio in a network is allowed to transmit, so that no two signals ever clash at a receiver. All radios share one frequency, so time is split into short slots and each radio gets its own slot. Radios that are far enough apart can safely share a slot, which keeps the schedule short. I model the radios as a graph and solve the problem as a graph colouring task, where each colour stands for a time slot. The program tries three well-known methods, keeps the best result, tries to improve it further, and then checks it against the smallest number of slots that is possible in theory. For the 16-radio grid used in the assignment, it finds a schedule of 9 slots, and I show that no valid schedule can use fewer. On 200 random networks of up to 150 radios, it always reached that theoretical minimum. In the second part, the schedule is loaded into the EMANE network emulator. With my schedule, EMANE recorded no collisions at all, while a simpler schedule that ignores hidden terminals lost over 60% of its packets to collisions.</p>
+</div>
+
+<h2>1&nbsp;&nbsp;Introduction</h2>
+
+<h3>1.1&nbsp;&nbsp;The problem</h3>
+<p>In a TDMA (Time Division Multiple Access) network, all radios use the same frequency and take turns. Time is divided into short slots, and a fixed group of slots, called a frame, repeats again and again. Each radio may only transmit in its own slot. The task is to write a program that reads the positions of 16 radios, gives each radio a slot, and prints the result as a list and as a table of slots against radios.</p>
+<p>Two situations must be avoided:</p>
+<ul>
+  <li><i>Direct clash.</i> Two radios that can hear each other transmit at the same time.</li>
+  <li><i>Hidden terminal.</i> Two radios cannot hear each other, but they have a neighbour in common. If both transmit in the same slot, the shared neighbour receives both signals at once and cannot understand either of them. The two senders have no way of noticing this, which is why it is called the hidden terminal problem.</li>
+</ul>
+<p>Radios that are three or more hops apart can safely use the same slot, because no single radio can hear both of them. This is called spatial reuse, and it is the main way to keep the frame short.</p>
+<p>A short frame matters because each radio gets one turn per frame. With 1&nbsp;ms slots, a 9-slot frame lets each radio transmit about 111 times per second. A 16-slot frame, with one slot per radio and no reuse, allows only about 62.</p>
+
+<h3>1.2&nbsp;&nbsp;Assumptions</h3>
+<ul>
+  <li>Two radios can hear each other if they are 500&nbsp;m apart or less. If A can hear B, then B can hear A.</li>
+  <li>The radios do not move while the schedule is in use.</li>
+  <li>Each radio needs one transmit slot per frame and listens during all other slots.</li>
+  <li>The brief gives only a few example positions (Node_01 at (0,&nbsp;0), Node_02 at (300,&nbsp;0) and Node_16 at (900,&nbsp;900)). These fit a 4&nbsp;&times;&nbsp;4 grid with 300&nbsp;m between neighbours, so I use that grid as the main test case.</li>
+</ul>
+
+<h2>2&nbsp;&nbsp;How the problem is modelled</h2>
+<p>I represent the network as a graph. Each radio is a point (a node), and a line (an edge) joins two radios that are within range. I call this the <i>radio graph</i>.</p>
+<p>Giving slots to radios is then the same as colouring the nodes of a graph: each slot is a colour, and certain pairs of nodes must get different colours. Here the rule is that two radios must get different slots if they are one hop or two hops apart:</p>
+<p class="eq">slot(A) &ne; slot(B) whenever A and B are 1 or 2 hops apart.</p>
+<p>This is known as <i>distance-2 colouring</i>. To make it easier to solve, I build a second graph, the <i>conflict graph</i>, which joins every pair of radios that must not share a slot. In graph theory this is called the square of the radio graph. Once the conflict graph exists, the problem becomes an ordinary graph colouring problem, and many standard methods can be used on it directly.</p>
+<p>Finding the smallest possible number of colours is a very hard problem. No known method can always find the best answer quickly for large networks [4]. For this reason, the brief asks for heuristics, which are practical rules that give good answers fast without a guarantee of being perfect. The same model is widely used for scheduling in radio networks [5].</p>
+
+<h2>3&nbsp;&nbsp;Design of the scheduler</h2>
+<p>The scheduler is written in Python. It uses the NetworkX library [6] to store the graphs and matplotlib to draw the figures. The code is split into small files so that each part can be tested on its own.</p>
+<table>
+  <thead><tr><th>File</th><th>What it does</th></tr></thead>
+  <tbody>
+    <tr><td><code>topology.py</code></td><td>Reads the input and builds the radio graph and the conflict graph</td></tr>
+    <tr><td><code>coloring.py</code></td><td>The colouring methods and the steps that improve the result</td></tr>
+    <tr><td><code>analysis.py</code></td><td>Minimum slot count, safety check, and slot sharing statistics</td></tr>
+    <tr><td><code>planner.py</code></td><td>Runs all the steps in order</td></tr>
+    <tr><td><code>report.py</code>, <code>plot.py</code></td><td>Text report, JSON output, and figures</td></tr>
+    <tr><td><code>schedule.py</code></td><td>The command line program</td></tr>
+  </tbody>
+</table>
+<div class="tcap">Table 1: Code structure.</div>
+
+<h3>3.1&nbsp;&nbsp;Building the conflict graph</h3>
+<p>First, the program measures the distance between every pair of radios and joins the pairs that are 500&nbsp;m apart or less. For 16 radios this is only 120 pairs, so a simple check of every pair is fast enough.</p>
+<p>Next it builds the conflict graph. NetworkX can do this in one call, but I wrote it out step by step because it follows the hidden terminal idea directly. For every radio B:</p>
+<ul>
+  <li>join B to each of its neighbours, since they would clash directly, and</li>
+  <li>join every pair of B's neighbours to each other, since those two would clash at B.</li>
+</ul>
+<p>Any two radios that are two hops apart must have a neighbour in common, so this covers every case.</p>
+
+<h3>3.2&nbsp;&nbsp;Giving out slots</h3>
+<p>All three methods use the same basic step, called greedy colouring. The radios are visited one at a time, and each one gets the lowest slot number that none of its conflicting radios already has. This is fast, but the result depends a lot on the order in which the radios are visited. The three methods differ only in how they choose that order:</p>
+<ul>
+  <li><i>Largest first.</i> Radios with the most conflicts go first. These are the hardest to place, so they are handled while many slots are still free.</li>
+  <li><i>Smallest last</i> [2]. The radio with the fewest conflicts is set aside again and again until none are left, and then the radios are given slots in the reverse order. This means each radio, when its turn comes, has only a few neighbours that already have a slot, so it rarely needs a new one.</li>
+  <li><i>DSATUR</i> [1]. At each step, the next radio is the one whose neighbours already use the most different slots. This radio has the fewest choices left, so it is handled before it runs out of options.</li>
+</ul>
+<p>All three methods run on every input and the best result is kept. Each takes only a few milliseconds, so running all of them costs almost nothing.</p>
+
+<h3>3.3&nbsp;&nbsp;Improving the result</h3>
+<p>The best result is then passed to a method called iterated greedy [3]. It groups the radios by the slot they currently have, changes the order of the groups, and runs greedy colouring again in that new order. Radios in the same group can always share a slot again, so this step never makes the schedule longer. Sometimes one group gets absorbed into the others, which saves a slot. I repeat this 300 times, using a fixed random seed so that the results can be reproduced.</p>
+<p>If the schedule is still longer than the theoretical minimum (Section 3.4), the program runs an exact search. It tries, in an organised way, to give out slots using one slot fewer. If it finds a way, the schedule gets shorter. If it proves there is no way, the current schedule is the best possible. This search can be slow on large networks, so it has a 5-second time limit. If the time runs out, the program keeps the best result it already has.</p>
+
+<h3>3.4&nbsp;&nbsp;The theoretical minimum</h3>
+<p>A heuristic gives an answer, but it does not say how good that answer is. To measure this, the program works out the smallest number of slots that any valid schedule could use, in two ways:</p>
+<ul>
+  <li><i>Busiest radio.</i> Take the radio with the most neighbours. That radio and all of its neighbours must each have a different slot, because the neighbours are all two hops apart through it. So the schedule needs at least (number of neighbours + 1) slots.</li>
+  <li><i>Largest clash group.</i> Find the largest group of radios in which every pair clashes. Each member of that group needs its own slot. NetworkX can find this group quickly for networks of this size. This bound is always at least as strong as the first one.</li>
+</ul>
+<p>If the schedule uses exactly this many slots, or the exact search has shown that fewer is impossible, the report says the schedule is optimal.</p>
+
+<h3>3.5&nbsp;&nbsp;Safety check</h3>
+<p>The final schedule is checked by separate code that does not use the conflict graph at all. It goes back to the radio graph, counts the hops between every pair of radios that share a slot, and reports any pair that is only one or two hops apart. If it finds a problem, the program prints it and ends with an error code. I added this because a mistake in building the conflict graph would otherwise go unnoticed: the schedule would look correct for the wrong graph.</p>
+
+<h3>3.6&nbsp;&nbsp;The command line program</h3>
+<p>The radio positions are given as a JSON string in the format shown in the brief, or read from a file with <code>--file</code>. Other options set the radio range, the number of improvement rounds, the random seed, and the time limit for the exact search. The program can also save a picture of the network (<code>--plot</code>) and a JSON copy of the schedule for Part 2 (<code>--json-out</code>). The text output follows the sample in the brief, and also shows the theoretical minimum, a comparison of the three methods, and which radios share each slot.</p>
+
+
+</body>
+</html>
