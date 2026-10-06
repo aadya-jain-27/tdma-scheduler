@@ -10,6 +10,7 @@ should lose packets, because two senders hit the same receiver in one slot.
 
 import json
 import math
+import os
 import re
 import subprocess
 import sys
@@ -23,7 +24,7 @@ for i, a in enumerate(names, 1):
     for j, b in enumerate(names, 1):
         if i != j and math.dist(pos[a], pos[b]) <= rng:
             cmd = ["ip", "netns", "exec", f"n{i}", "ping", "-q", "-c", "50",
-                   "-i", "0.05", "-W", "1", f"10.100.0.{j}"]
+                   "-i", os.environ.get("PING_INTERVAL", "0.05"), "-W", "1", f"10.100.0.{j}"]
             jobs.append((a, b, subprocess.Popen(cmd, stdout=subprocess.PIPE, text=True)))
 
 lines, total = [], 0.0

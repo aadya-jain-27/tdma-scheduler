@@ -26,7 +26,7 @@ import xml.etree.ElementTree as ET
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
-SLOT_US = 1000            # 1 ms slots, as the assignment asks
+SLOT_US = int(os.environ.get("SLOT_US", 1000))   # 1 ms slots, as the assignment asks
 FREQUENCY = "2.4G"        # single shared channel
 DATARATE = "10M"          # 10 Mbit/s x 1 ms = 1250 bytes per slot, fits a ping
 IN_RANGE_DB = 90.0        # pathloss for radios within range: strong signal

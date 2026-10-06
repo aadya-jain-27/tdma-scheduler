@@ -64,12 +64,17 @@ run_round() {   # $1 = label, rest = extra bridge flags
   python3 emane/traffic_test.py output/emane_input.json "$label"
   for i in $(seq 1 "$n"); do                      # proof: per-slot TX/RX counters
     ip netns exec "n$i" emanesh localhost get table nems mac TxSlotStatusTable \
-        > "output/emane_${label}_tx_nem$i.txt" 2>&1 || true
+        > "output/emane_raw/${label}_tx_nem$i.txt" 2>&1 || true
+    ip netns exec "n$i" emanesh localhost get table nems mac \
+        > "output/emane_raw/${label}_drops_nem$i.txt" 2>&1 || true
+    ip netns exec "n$i" emanesh localhost get table nems phy PathlossEventInfoTable ReceivePowerTable \
+        >> "output/emane_raw/${label}_drops_nem$i.txt" 2>&1 || true
   done
   stop_all "$n"
 }
 
+mkdir -p output/emane_raw
 python3 schedule.py --file "$NODES" --json-out output/emane_input.json > output/emane_part1.txt
-run_round optimized
-run_round naive --naive
+run_round "optimized${SUFFIX:-}"
+run_round "naive${SUFFIX:-}" --naive
 echo "done: see output/emane_results_*.txt"
