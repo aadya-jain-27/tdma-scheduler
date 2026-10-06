@@ -15,6 +15,7 @@ Submission for the Vaan Megam Networks Wireless Developer Internship assignment.
 * **0 collisions**, confirmed by an independent verifier that re-measures hop distances.
 * **200 out of 200** random networks (16 to 150 radios) solved at the proven lower bound, in under 0.2 s each.
 * A naive one-hop schedule would use 4 slots but cause **24 hidden-terminal collisions**.
+* In EMANE, our schedule had **zero collision drops**; with 5 ms slots it delivered every packet, while the naive schedule lost 61%.
 
 ![Schedule for the 4x4 grid](output/grid_4x4.png)
 
@@ -37,9 +38,11 @@ python3 make_figures.py          # regenerate every figure
 python3 emane/bridge.py output/schedule.json            # -> emane/generated/
 python3 emane/bridge.py output/schedule.json --naive    # comparison schedule
 
-# Part 2: live run (Linux or Docker, a few GB of free disk)
+# Part 2: live run (Docker, about 3 GB of free disk for the image)
 docker build -t tdma-emane emane/
 docker run --rm -it --privileged -v "$PWD":/work tdma-emane bash emane/run_demo.sh
+docker run --rm -it --privileged -e SLOT_US=5000 -e SUFFIX=_5ms -v "$PWD":/work tdma-emane bash emane/run_demo.sh
+python3 emane/summarize.py
 ```
 
 Options: `--range` (metres, default 500), `--rounds` (iterated greedy rounds), `--seed`, `--exact-seconds` (time limit for the exact search), `--plot`, `--json-out`. The exit code is 1 if verification fails.
@@ -68,6 +71,17 @@ tests/               tests
 docs/                documentation PDF and presentation
 ```
 
-## Part 2 status
+## Part 2 results (EMANE)
 
-The bridge, the XML profiles and the run script are complete, and the bridge is tested (schedule to XML and back is identical). The live EMANE run was not executed: the EMANE source build stopped because the development laptop ran out of disk space. Details and the planned experiment are in the documentation, section 5.
+16 emulated radios on the 4×4 grid, every radio pinging all its neighbours at once (84 links). EMANE's slot tables show each radio transmitted only in its assigned slot.
+
+| Slots | Schedule | Avg loss | Links with 0% loss | Collision drops |
+|---|---|---|---|---|
+| 1 ms | distance-2 (ours) | 9.9% | 37 / 84 | 0 |
+| 1 ms | one-hop (naive) | 63.8% | 0 / 84 | 1,078 bytes |
+| 5 ms | distance-2 (ours) | **0.0%** | **84 / 84** | 0 |
+| 5 ms | one-hop (naive) | 61.4% | 0 / 84 | 20,688 bytes |
+
+With 1 ms slots our schedule had no collisions; its remaining loss was all packets arriving after their slot ended, because 16 emulators share 2 CPU cores in the Docker VM. With 5 ms slots that timing problem goes away and every packet is delivered. Full numbers: [output/emane_summary.md](output/emane_summary.md).
+
+![EMANE packet loss](output/emane_results.png)
