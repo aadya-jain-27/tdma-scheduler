@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE transport SYSTEM "file:///usr/share/emane/dtd/transport.dtd">
+<!-- Creates a virtual network card "emane0" inside each node,
+     so normal tools like ping can send traffic over the emulated radio. -->
+<transport library="transvirtual">
+  <param name="bitrate" value="0"/>
+  <param name="devicepath" value="/dev/net/tun"/>
+</transport>

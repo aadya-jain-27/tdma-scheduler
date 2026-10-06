@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE nem SYSTEM "file:///usr/share/emane/dtd/nem.dtd">
+<!-- One radio = one NEM (Network Emulation Module):
+     virtual network card (transport) + TDMA MAC + physical layer. -->
+<nem>
+  <transport definition="transvirtual.xml"/>
+  <mac definition="tdmaradiomodel.xml"/>
+  <phy>
+    <!-- All radios share ONE frequency, exactly like the problem statement. -->
+    <param name="frequencyofinterest" value="2.4G"/>
+    <param name="bandwidth" value="1M"/>
+    <param name="fixedantennagain" value="0.0"/>
+    <param name="fixedantennagainenable" value="on"/>
+    <param name="systemnoisefigure" value="4.0"/>
+    <!-- "all": signals that overlap in time ADD UP as interference.
+         This is what makes a hidden terminal collision actually drop packets. -->
+    <param name="noisemode" value="all"/>
+    <!-- We push pathloss values ourselves (bridge.py), built from the
+         same 500 m rule as Part 1, so "in range" means the same thing in both. -->
+    <param name="propagationmodel" value="precomputed"/>
+  </phy>
+</nem>
