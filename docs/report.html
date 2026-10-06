@@ -139,6 +139,61 @@
 <h3>3.6&nbsp;&nbsp;The command line program</h3>
 <p>The radio positions are given as a JSON string in the format shown in the brief, or read from a file with <code>--file</code>. Other options set the radio range, the number of improvement rounds, the random seed, and the time limit for the exact search. The program can also save a picture of the network (<code>--plot</code>) and a JSON copy of the schedule for Part 2 (<code>--json-out</code>). The text output follows the sample in the brief, and also shows the theoretical minimum, a comparison of the three methods, and which radios share each slot.</p>
 
+<h2>4&nbsp;&nbsp;Results</h2>
+
+<h3>4.1&nbsp;&nbsp;The 4 &times; 4 grid</h3>
+<p>With 300&nbsp;m between neighbours and a 500&nbsp;m range, each radio can hear the radios next to it horizontally, vertically and diagonally (the diagonal distance is 424&nbsp;m). This gives 42 links and 90 pairs of radios that must not share a slot. The radios in the middle of the grid have 8 neighbours each, so the minimum is 9 slots. All three methods found a 9-slot schedule straight away, so the schedule is optimal. It is shown in Figure 1, and the slot table is given below.</p>
+<pre>Slot \ Node | 01 | 02 | 03 | 04 | 05 | 06 | 07 | 08 | 09 | 10 | 11 | 12 | 13 | 14 | 15 | 16
+Slot 00     |  1 |  0 |  0 |  1 |  0 |  0 |  0 |  0 |  0 |  0 |  0 |  0 |  1 |  0 |  0 |  1
+Slot 01     |  0 |  1 |  0 |  0 |  0 |  0 |  0 |  0 |  0 |  0 |  0 |  0 |  0 |  1 |  0 |  0
+Slot 02     |  0 |  0 |  1 |  0 |  0 |  0 |  0 |  0 |  0 |  0 |  0 |  0 |  0 |  0 |  1 |  0
+Slot 03     |  0 |  0 |  0 |  0 |  1 |  0 |  0 |  1 |  0 |  0 |  0 |  0 |  0 |  0 |  0 |  0
+Slot 04     |  0 |  0 |  0 |  0 |  0 |  1 |  0 |  0 |  0 |  0 |  0 |  0 |  0 |  0 |  0 |  0
+Slot 05     |  0 |  0 |  0 |  0 |  0 |  0 |  1 |  0 |  0 |  0 |  0 |  0 |  0 |  0 |  0 |  0
+Slot 06     |  0 |  0 |  0 |  0 |  0 |  0 |  0 |  0 |  1 |  0 |  0 |  1 |  0 |  0 |  0 |  0
+Slot 07     |  0 |  0 |  0 |  0 |  0 |  0 |  0 |  0 |  0 |  1 |  0 |  0 |  0 |  0 |  0 |  0
+Slot 08     |  0 |  0 |  0 |  0 |  0 |  0 |  0 |  0 |  0 |  0 |  1 |  0 |  0 |  0 |  0 |  0</pre>
+<p>Twelve of the 16 radios share their slot with at least one other radio. The four corner radios all use slot 0, and each pair of corners is three hops apart, which is the closest distance at which sharing is allowed. The four radios in the centre each need their own slot, because each of them is within two hops of every other radio in the grid.</p>
+
+<figure><img src="../output/grid_4x4.png" style="width:72%"><figcaption>Figure 1: Slot plan for the 4 &times; 4 grid. Each circle shows the radio number and its slot. Grey lines are radio links, and the shaded areas show the 500&nbsp;m range.</figcaption></figure>
+
+<h3>4.2&nbsp;&nbsp;Other layouts</h3>
+<p>I also tested three other 16-radio layouts that are less regular than the grid.</p>
+<table>
+  <thead><tr><th>Layout</th><th class="r">Links</th><th class="r">Clashing pairs</th><th class="r">Slots used</th><th class="r">Minimum</th><th class="r">Radios per slot</th></tr></thead>
+  <tbody>
+    <tr><td>4 &times; 4 grid, 300&nbsp;m apart</td><td class="r">42</td><td class="r">90</td><td class="r">9</td><td class="r">9</td><td class="r">1.78</td></tr>
+    <tr><td>Straight line, 350&nbsp;m apart</td><td class="r">15</td><td class="r">29</td><td class="r">3</td><td class="r">3</td><td class="r">5.33</td></tr>
+    <tr><td>Two groups 3&nbsp;km apart</td><td class="r">45</td><td class="r">56</td><td class="r">8</td><td class="r">8</td><td class="r">2.00</td></tr>
+    <tr><td>Random, 1.5&nbsp;km square</td><td class="r">27</td><td class="r">48</td><td class="r">6</td><td class="r">6</td><td class="r">2.67</td></tr>
+  </tbody>
+</table>
+<div class="tcap">Table 2: Results for the four example layouts. All four schedules are optimal.</div>
+<p>The straight line shows spatial reuse most clearly. The slots repeat as 0,&nbsp;1,&nbsp;2,&nbsp;0,&nbsp;1,&nbsp;2,&nbsp;&hellip;, so 16 radios need only 3 slots. In the two-group layout, the groups are too far apart to disturb each other, so the larger group decides the frame length and the other group reuses the same slots.</p>
+
+<h3>4.3&nbsp;&nbsp;Comparison with a simpler schedule</h3>
+<p>To show why the two-hop rule matters, I also made a simpler schedule for the grid that only keeps direct neighbours apart and ignores hidden terminals. It needs only 4 slots, which looks much better at first. However, the safety check finds 24 pairs of radios that share a slot and also share a neighbour (Figure 2). At each of those shared neighbours, packets would be lost whenever both senders are active.</p>
+<figure><img src="../output/naive_vs_ours.png" style="width:100%"><figcaption>Figure 2: The simpler one-hop schedule (left) and the two-hop schedule (right) on the same grid. Dashed red lines join radios that share a slot and a neighbour.</figcaption></figure>
+
+<h3>4.4&nbsp;&nbsp;Testing on larger networks</h3>
+<p>With only 16 radios, most sensible methods do well, so I also tested larger networks. I created 40 random networks for each size of 16, 32, 64, 100 and 150 radios. The area grew with the number of radios, so the networks stayed equally crowded. For each network I recorded how many slots each method used above the theoretical minimum.</p>
+<table>
+  <thead><tr><th class="r">Radios</th><th class="r">Largest first</th><th class="r">Smallest last</th><th class="r">DSATUR</th><th class="r">Final result</th><th class="r">Optimal</th><th class="r">Average time</th></tr></thead>
+  <tbody>
+    <tr><td class="r">16</td><td class="r">0.00</td><td class="r">0.00</td><td class="r">0.00</td><td class="r">0.00</td><td class="r">40 / 40</td><td class="r">5 ms</td></tr>
+    <tr><td class="r">32</td><td class="r">0.05</td><td class="r">0.00</td><td class="r">0.00</td><td class="r">0.00</td><td class="r">40 / 40</td><td class="r">12 ms</td></tr>
+    <tr><td class="r">64</td><td class="r">0.17</td><td class="r">0.00</td><td class="r">0.03</td><td class="r">0.00</td><td class="r">40 / 40</td><td class="r">26 ms</td></tr>
+    <tr><td class="r">100</td><td class="r">0.25</td><td class="r">0.00</td><td class="r">0.00</td><td class="r">0.00</td><td class="r">40 / 40</td><td class="r">54 ms</td></tr>
+    <tr><td class="r">150</td><td class="r">0.17</td><td class="r">0.00</td><td class="r">0.05</td><td class="r">0.00</td><td class="r">40 / 40</td><td class="r">125 ms</td></tr>
+  </tbody>
+</table>
+<div class="tcap">Table 3: Average number of extra slots above the minimum, over 40 random networks per size. "Final result" is the output of the full program. The time covers all steps.</div>
+<figure><img src="../output/benchmark.png" style="width:82%"><figcaption>Figure 3: The results from Table 3 plotted against network size.</figcaption></figure>
+<p>Largest first was the weakest method and sometimes used one extra slot. Smallest last never did, in any of the 200 networks. I think this is because the networks are based on distance: in any group of radios, some are near the edge and have only a few conflicts, and smallest last makes good use of exactly that. The full program reached the minimum every time. On these networks, the improvement step and the exact search did not change any result. Their real value here was confirming that each result was the best possible. I also tried networks where radios were bunched into a few clusters, and the results were the same.</p>
+
+<h3>4.5&nbsp;&nbsp;A note on the sample output in the brief</h3>
+<p>While testing the safety check, I ran the sample schedule from the brief (5 slots) on the 300&nbsp;m grid. It found 21 hidden terminal clashes. For example, Node_01 and Node_03 are both in slot 0, and both can reach Node_02. Since the minimum for this grid is 9 slots, no 5-slot schedule can be correct for it. The sample was probably meant only to show the output format, or was made for different positions, but it was a useful test that the safety check catches real mistakes.</p>
+
 
 </body>
 </html>
